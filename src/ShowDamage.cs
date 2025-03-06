@@ -18,7 +18,7 @@ namespace CS2_ShowDamage
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.1";
+		public override string ModuleVersion => "1.DZ.2";
 		public override void OnAllPluginsLoaded(bool hotReload)
 		{
 			try
@@ -45,7 +45,7 @@ namespace CS2_ShowDamage
 			DeregisterEventHandler<EventPlayerHurt>(OnEventPlayerHurt, HookMode.Post);
 			DeregisterEventHandler<EventPlayerConnectFull>(OnEventPlayerConnectFull, HookMode.Post);
 			DeregisterEventHandler<EventPlayerDisconnect>(OnEventPlayerDisconnect, HookMode.Pre);
-			Utilities.GetPlayers().ForEach(player => { RemoveHUD(player);});
+			Utilities.GetPlayers().ForEach(player => { RemoveHUD(player); });
 		}
 		private HookResult OnEventPlayerHurt(EventPlayerHurt @event, GameEventInfo info)
 		{
@@ -55,6 +55,7 @@ namespace CS2_ShowDamage
 			int iDamage = @event.DmgHealth;
 			if (player != null && player.IsValid)
 			{
+				_api.Native_GameHUD_UpdateParams(player, HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, System.Drawing.Color.Red, 32, "Verdana", 0.007f);
 				_api.Native_GameHUD_Show(player, HUDCHANNEL_SELFDAMAGE, $"-{iDamage}", 2.0f);
 			}
 			if (attacker != null && attacker.IsValid)
