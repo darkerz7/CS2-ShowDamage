@@ -35,7 +35,7 @@ namespace CS2_ShowDamage
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.4";
+		public override string ModuleVersion => "1.DZ.4.1";
 		public void OnConfigParsed(HUDConfig config)
 		{
 			if (config.HUDCHANNEL_DAMAGE < 0 || config.HUDCHANNEL_DAMAGE > 32)
@@ -110,7 +110,7 @@ namespace CS2_ShowDamage
 			int iDamage = @event.DmgHealth;
 			if (player != null && player.IsValid && g_bShow[player.Slot])
 			{
-				_api.Native_GameHUD_UpdateParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, System.Drawing.Color.Red, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
+				_api.Native_GameHUD_UpdateParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, Config.HUDSELFCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
 				_api.Native_GameHUD_Show(player, Config.HUDCHANNEL_SELFDAMAGE, $"-{iDamage}", Config.HUDTIME_SELFDAMAGE);
 			}
 			if (attacker != null && attacker.IsValid && g_bShow[attacker.Slot])
@@ -118,7 +118,7 @@ namespace CS2_ShowDamage
 				double r = rd.NextDouble() * 2 * Math.PI;
 				g_vecPlayer[attacker.Slot].X = (float)Math.Cos(r) * Config.HUDRADIUS - 0.1f;
 				g_vecPlayer[attacker.Slot].Y = (float)Math.Sin(r) * Config.HUDRADIUS + 0.1f;
-				_api.Native_GameHUD_UpdateParams(attacker, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[attacker.Slot], System.Drawing.Color.Aqua, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
+				_api.Native_GameHUD_UpdateParams(attacker, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[attacker.Slot], Config.HUDCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
 				_api.Native_GameHUD_Show(attacker, Config.HUDCHANNEL_DAMAGE, $"{iDamage}", Config.HUDTIME_DAMAGE);
 			}
 			return HookResult.Continue;
@@ -143,8 +143,8 @@ namespace CS2_ShowDamage
 			{
 				if (string.IsNullOrEmpty(Config.HUDFLAG)) g_bShow[player.Slot] = true;
 				else g_bShow[player.Slot] = AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
-				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[player.Slot], System.Drawing.Color.Aqua, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
-				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, System.Drawing.Color.Red, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
+				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[player.Slot], Config.HUDCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
+				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, Config.HUDSELFCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
 			}
 		}
 
