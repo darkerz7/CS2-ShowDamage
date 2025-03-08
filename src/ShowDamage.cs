@@ -21,8 +21,8 @@ namespace CS2_ShowDamage
 		[JsonPropertyName("Self_PosX")] public float HUDSELFX { get; set; } = 0.0f;
 		[JsonPropertyName("Self_PosY")] public float HUDSELFY { get; set; } = -0.7f;
 		[JsonPropertyName("Flag")] public string? HUDFLAG { get; set; } = null;
-		[JsonPropertyName("Color")] public System.Drawing.Color HUDCOLOR { get; set; } = System.Drawing.Color.Aqua;
-		[JsonPropertyName("Color_Self")] public System.Drawing.Color HUDSELFCOLOR { get; set; } = System.Drawing.Color.Red;
+		[JsonPropertyName("Color")] public int[] HUDCOLOR { get; set; } = [0, 255, 255, 255];
+		[JsonPropertyName("Color_Self")] public int[] HUDSELFCOLOR { get; set; } = [255, 0, 0, 255];
 	}
 	public class ShowDamage : BasePlugin, IPluginConfig<HUDConfig>
 	{
@@ -31,11 +31,13 @@ namespace CS2_ShowDamage
 		static Vector g_vecSelfDamage = new(0, -0.7f, 7);
 		static Vector[] g_vecPlayer = new Vector[65];
 		static bool[] g_bShow = new bool[65];
+		static System.Drawing.Color g_colorDamage = System.Drawing.Color.Aqua;
+		static System.Drawing.Color g_colorSelfDamage = System.Drawing.Color.Red;
 		static IGameHUDAPI? _api;
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.4.1";
+		public override string ModuleVersion => "1.DZ.5";
 		public void OnConfigParsed(HUDConfig config)
 		{
 			if (config.HUDCHANNEL_DAMAGE < 0 || config.HUDCHANNEL_DAMAGE > 32)
@@ -50,10 +52,10 @@ namespace CS2_ShowDamage
 			if (string.IsNullOrEmpty(config.HUDFONT))
 				config.HUDFONT = "Verdana";
 
-			if (config.HUDTIME_DAMAGE < 0.1f || config.HUDTIME_DAMAGE > 10.0f)
+			if (config.HUDTIME_DAMAGE < 0.0f || config.HUDTIME_DAMAGE > 10.0f)
 				config.HUDTIME_DAMAGE = 2.0f;
 
-			if (config.HUDTIME_SELFDAMAGE < 0.1f || config.HUDTIME_SELFDAMAGE > 10.0f)
+			if (config.HUDTIME_SELFDAMAGE < 0.0f || config.HUDTIME_SELFDAMAGE > 10.0f)
 				config.HUDTIME_SELFDAMAGE = 2.0f;
 
 			if (config.HUDRADIUS < 0.1f || config.HUDRADIUS > 10.0f)
@@ -65,10 +67,24 @@ namespace CS2_ShowDamage
 			if (config.HUDSELFY < -10.0f || config.HUDSELFY > 10.0f)
 				config.HUDSELFY = -0.7f;
 
+			if (config.HUDCOLOR.Length < 4)
+				config.HUDCOLOR = [0, 255, 255, 255];
+			for (int i = 0; i < config.HUDCOLOR.Length; i++)
+				if (config.HUDCOLOR[i] < 0 || config.HUDCOLOR[i] > 255)
+					config.HUDCOLOR[i] = 255;
+
+			if (config.HUDSELFCOLOR.Length < 4)
+				config.HUDSELFCOLOR = [0, 255, 255, 255];
+			for (int i = 0; i < config.HUDSELFCOLOR.Length; i++)
+				if (config.HUDSELFCOLOR[i] < 0 || config.HUDSELFCOLOR[i] > 255)
+					config.HUDSELFCOLOR[i] = 255;
+
 			Config = config;
 
 			g_vecSelfDamage.X = Config.HUDSELFX;
 			g_vecSelfDamage.Y = Config.HUDSELFY;
+			g_colorDamage = System.Drawing.Color.FromArgb(Config.HUDCOLOR[3], Config.HUDCOLOR[0], Config.HUDCOLOR[1], Config.HUDCOLOR[2]);
+			g_colorSelfDamage = System.Drawing.Color.FromArgb(Config.HUDSELFCOLOR[3], Config.HUDSELFCOLOR[0], Config.HUDSELFCOLOR[1], Config.HUDSELFCOLOR[2]);
 		}
 		public override void OnAllPluginsLoaded(bool hotReload)
 		{
@@ -82,6 +98,7 @@ namespace CS2_ShowDamage
 				_api = null;
 				Console.WriteLine($"[GameHUD] API Loading Failed!");
 			}
+			if (hotReload) Utilities.GetPlayers().ForEach(player => { SetHUD(player); });
 		}
 		public override void Load(bool hotReload)
 		{
@@ -90,7 +107,6 @@ namespace CS2_ShowDamage
 				g_bShow[i] = new();
 				g_vecPlayer[i] = new(0, 0, 7);
 			}
-			if (hotReload) Utilities.GetPlayers().ForEach(player => { SetHUD(player); });
 			RegisterEventHandler<EventPlayerHurt>(OnEventPlayerHurt, HookMode.Post);
 			RegisterEventHandler<EventPlayerConnectFull>(OnEventPlayerConnectFull, HookMode.Post);
 			RegisterEventHandler<EventPlayerDisconnect>(OnEventPlayerDisconnect, HookMode.Pre);
@@ -108,18 +124,19 @@ namespace CS2_ShowDamage
 			CCSPlayerController? player = @event.Userid;
 			CCSPlayerController? attacker = @event.Attacker;
 			int iDamage = @event.DmgHealth;
-			if (player != null && player.IsValid && g_bShow[player.Slot])
+			if ((float)Config.HUDTIME_SELFDAMAGE > 0.0 && player != null && player.IsValid && g_bShow[player.Slot])
 			{
-				_api.Native_GameHUD_UpdateParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, Config.HUDSELFCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
-				_api.Native_GameHUD_Show(player, Config.HUDCHANNEL_SELFDAMAGE, $"-{iDamage}", Config.HUDTIME_SELFDAMAGE);
+				_api.Native_GameHUD_UpdateParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, g_colorSelfDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
+				_api.Native_GameHUD_Show(player, Config.HUDCHANNEL_SELFDAMAGE, $"-{iDamage}", (float)Config.HUDTIME_SELFDAMAGE);
+
 			}
-			if (attacker != null && attacker.IsValid && g_bShow[attacker.Slot])
+			if ((float)Config.HUDTIME_DAMAGE > 0.0 && attacker != null && attacker.IsValid && g_bShow[attacker.Slot])
 			{
 				double r = rd.NextDouble() * 2 * Math.PI;
 				g_vecPlayer[attacker.Slot].X = (float)Math.Cos(r) * Config.HUDRADIUS - 0.1f;
 				g_vecPlayer[attacker.Slot].Y = (float)Math.Sin(r) * Config.HUDRADIUS + 0.1f;
-				_api.Native_GameHUD_UpdateParams(attacker, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[attacker.Slot], Config.HUDCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
-				_api.Native_GameHUD_Show(attacker, Config.HUDCHANNEL_DAMAGE, $"{iDamage}", Config.HUDTIME_DAMAGE);
+				_api.Native_GameHUD_UpdateParams(attacker, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[attacker.Slot], g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
+				_api.Native_GameHUD_Show(attacker, Config.HUDCHANNEL_DAMAGE, $"{iDamage}", (float)Config.HUDTIME_DAMAGE);
 			}
 			return HookResult.Continue;
 		}
@@ -143,8 +160,8 @@ namespace CS2_ShowDamage
 			{
 				if (string.IsNullOrEmpty(Config.HUDFLAG)) g_bShow[player.Slot] = true;
 				else g_bShow[player.Slot] = AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
-				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[player.Slot], Config.HUDCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
-				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, Config.HUDSELFCOLOR, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
+				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[player.Slot], g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
+				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, g_colorSelfDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
 			}
 		}
 
