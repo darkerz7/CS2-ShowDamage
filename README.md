@@ -4,9 +4,10 @@ Shows the damage dealt to the player
 ## Required packages:
 1. [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/) (Min version: 285)
 2. [CS2-GameHUD](https://github.com/darkerz7/CS2-GameHUD/)
+3. Optional [ClientPrefs_CS2](https://github.com/darkerz7/ClientPrefs_CS2/)
 
 ## Installation:
-1. Install CS2-GameHUD
+1. Install CS2-GameHUD, optional ClientPrefs_CS2
 2. Compile or copy CS2-ShowDamage to `counterstrikesharp/plugins/CS2-ShowDamage` folger
 3. Restart server
 

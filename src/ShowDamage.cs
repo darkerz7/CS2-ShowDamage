@@ -1,10 +1,15 @@
 ﻿using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Admin;
+using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using CS2_GameHUDAPI;
 using System.Text.Json.Serialization;
+#if (USE_CLIENTPREFS)
+using ClientPrefsAPI;
+#endif
 
 namespace CS2_ShowDamage
 {
@@ -34,10 +39,13 @@ namespace CS2_ShowDamage
 		static System.Drawing.Color g_colorDamage = System.Drawing.Color.Aqua;
 		static System.Drawing.Color g_colorSelfDamage = System.Drawing.Color.Red;
 		static IGameHUDAPI? _api;
+#if (USE_CLIENTPREFS)
+		static IClientPrefsAPI? _CP_api;
+#endif
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.5";
+		public override string ModuleVersion => "1.DZ.6";
 		public void OnConfigParsed(HUDConfig config)
 		{
 			if (config.HUDCHANNEL_DAMAGE < 0 || config.HUDCHANNEL_DAMAGE > 32)
@@ -90,7 +98,7 @@ namespace CS2_ShowDamage
 		{
 			try
 			{
-				PluginCapability<IGameHUDAPI> CapabilityCP = new("gamehud:api");
+				PluginCapability<IGameHUDAPI> CapabilityGH = new("gamehud:api");
 				_api = IGameHUDAPI.Capability.Get();
 			}
 			catch (Exception)
@@ -98,7 +106,27 @@ namespace CS2_ShowDamage
 				_api = null;
 				Console.WriteLine($"[GameHUD] API Loading Failed!");
 			}
-			if (hotReload) Utilities.GetPlayers().ForEach(player => { SetHUD(player); });
+
+#if (USE_CLIENTPREFS)
+			try
+			{
+				PluginCapability<IClientPrefsAPI> CapabilityCP = new("clientprefs:api");
+				_CP_api = IClientPrefsAPI.Capability.Get();
+			}
+			catch (Exception)
+			{
+				_CP_api = null;
+				//Console.WriteLine($"[ClientPrefs] API Loading Failed!");
+			}
+#endif
+
+			if (hotReload)
+			{
+				Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false, IsHLTV: false }).ToList().ForEach(player =>
+				{
+					SetHUD(player);
+				});
+			}
 		}
 		public override void Load(bool hotReload)
 		{
@@ -158,8 +186,17 @@ namespace CS2_ShowDamage
 		{
 			if (_api != null && player != null && player.IsValid)
 			{
-				if (string.IsNullOrEmpty(Config.HUDFLAG)) g_bShow[player.Slot] = true;
-				else g_bShow[player.Slot] = AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
+				g_bShow[player.Slot] = string.IsNullOrEmpty(Config.HUDFLAG) || AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
+#if (USE_CLIENTPREFS)
+				if (_CP_api != null && g_bShow[player.Slot])
+				{
+					string sValue = _CP_api.GetClientCookie(player.SteamID.ToString(), "ShowDamage");
+					if (!string.IsNullOrEmpty(sValue) && Int32.TryParse(sValue, out int iValue))
+						if (iValue == 0) g_bShow[player.Slot] = false;
+						else g_bShow[player.Slot] = true;
+				}
+#endif
+
 				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[player.Slot], g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
 				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, g_colorSelfDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
 			}
@@ -172,6 +209,30 @@ namespace CS2_ShowDamage
 				g_bShow[player.Slot] = false;
 				_api.Native_GameHUD_Remove(player, Config.HUDCHANNEL_DAMAGE);
 				_api.Native_GameHUD_Remove(player, Config.HUDCHANNEL_SELFDAMAGE);
+			}
+		}
+		[ConsoleCommand("css_showdamage", "Toggle show damage")]
+		[ConsoleCommand("css_showdmg", "Toggle show damage")]
+		[ConsoleCommand("css_sd", "Toggle show damage")]
+		[ConsoleCommand("css_damage", "Toggle show damage")]
+		[ConsoleCommand("css_dmg", "Toggle show damage")]
+		[CommandHelper(minArgs: 0, usage: "", whoCanExecute: CommandUsage.CLIENT_ONLY)]
+		public void OnCommandSD(CCSPlayerController? player, CommandInfo command)
+		{
+			if (player == null || !player.IsValid) return;
+			bool bAccess = string.IsNullOrEmpty(Config.HUDFLAG) || AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
+			if (bAccess)
+			{
+				g_bShow[player.Slot] = !g_bShow[player.Slot];
+				if (command.CallingContext == CommandCallingContext.Console) player.PrintToConsole($"[ShowDamage] is {(g_bShow[player.Slot] ? "Enabled" : "Disabled")}");
+				else player.PrintToChat($" \x0B[\x04ShowDamage\x0B]\x01 is {(g_bShow[player.Slot] ? "Enabled" : "Disabled")}");
+#if (USE_CLIENTPREFS)
+				if (_CP_api != null)
+				{
+					if (g_bShow[player.Slot]) _CP_api.SetClientCookie(player.SteamID.ToString(), "ShowDamage", "1");
+					else _CP_api.SetClientCookie(player.SteamID.ToString(), "ShowDamage", "0");
+				}
+#endif
 			}
 		}
 	}
