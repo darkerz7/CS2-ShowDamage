@@ -8,7 +8,7 @@ using CounterStrikeSharp.API.Modules.Utils;
 using CS2_GameHUDAPI;
 using System.Text.Json.Serialization;
 #if (USE_CLIENTPREFS)
-using ClientPrefsAPI;
+using PlayerSettings;
 #endif
 
 namespace CS2_ShowDamage
@@ -40,12 +40,13 @@ namespace CS2_ShowDamage
 		static System.Drawing.Color g_colorSelfDamage = System.Drawing.Color.Red;
 		static IGameHUDAPI? _api;
 #if (USE_CLIENTPREFS)
-		static IClientPrefsAPI? _CP_api;
+		private ISettingsApi? _PlayerSettingsAPI;
+		private readonly PluginCapability<ISettingsApi?> _PlayerSettingsAPICapability = new("settings:nfcore");
 #endif
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.6";
+		public override string ModuleVersion => "1.DZ.6.1";
 		public void OnConfigParsed(HUDConfig config)
 		{
 			if (config.HUDCHANNEL_DAMAGE < 0 || config.HUDCHANNEL_DAMAGE > 32)
@@ -108,16 +109,9 @@ namespace CS2_ShowDamage
 			}
 
 #if (USE_CLIENTPREFS)
-			try
-			{
-				PluginCapability<IClientPrefsAPI> CapabilityCP = new("clientprefs:api");
-				_CP_api = IClientPrefsAPI.Capability.Get();
-			}
-			catch (Exception)
-			{
-				_CP_api = null;
-				//Console.WriteLine($"[ClientPrefs] API Loading Failed!");
-			}
+			_PlayerSettingsAPI = _PlayerSettingsAPICapability.Get();
+			if (_PlayerSettingsAPI == null)
+				Console.WriteLine($"[PlayerSettings] API Loading Failed!");
 #endif
 
 			if (hotReload)
@@ -188,9 +182,9 @@ namespace CS2_ShowDamage
 			{
 				g_bShow[player.Slot] = string.IsNullOrEmpty(Config.HUDFLAG) || AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
 #if (USE_CLIENTPREFS)
-				if (_CP_api != null && g_bShow[player.Slot])
+				if (_PlayerSettingsAPI != null && g_bShow[player.Slot])
 				{
-					string sValue = _CP_api.GetClientCookie(player.SteamID.ToString(), "ShowDamage");
+					string sValue = _PlayerSettingsAPI.GetPlayerSettingsValue(player, "ShowDamage", "1");
 					if (!string.IsNullOrEmpty(sValue) && Int32.TryParse(sValue, out int iValue))
 						if (iValue == 0) g_bShow[player.Slot] = false;
 						else g_bShow[player.Slot] = true;
@@ -227,10 +221,10 @@ namespace CS2_ShowDamage
 				if (command.CallingContext == CommandCallingContext.Console) player.PrintToConsole($"[ShowDamage] is {(g_bShow[player.Slot] ? "Enabled" : "Disabled")}");
 				else player.PrintToChat($" \x0B[\x04ShowDamage\x0B]\x01 is {(g_bShow[player.Slot] ? "Enabled" : "Disabled")}");
 #if (USE_CLIENTPREFS)
-				if (_CP_api != null)
+				if (_PlayerSettingsAPI != null)
 				{
-					if (g_bShow[player.Slot]) _CP_api.SetClientCookie(player.SteamID.ToString(), "ShowDamage", "1");
-					else _CP_api.SetClientCookie(player.SteamID.ToString(), "ShowDamage", "0");
+					if (g_bShow[player.Slot]) _PlayerSettingsAPI.SetPlayerSettingsValue(player, "ShowDamage", "1");
+					else _PlayerSettingsAPI.SetPlayerSettingsValue(player, "ShowDamage", "0");
 				}
 #endif
 			}

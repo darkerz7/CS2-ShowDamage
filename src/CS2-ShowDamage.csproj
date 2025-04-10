@@ -20,11 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="ClientPrefsAPI">
-      <HintPath>API\ClientPrefsAPI.dll</HintPath>
-    </Reference>
     <Reference Include="CS2-GameHUDAPI">
       <HintPath>API\CS2-GameHUDAPI.dll</HintPath>
+    </Reference>
+    <Reference Include="PlayerSettingsApi">
+      <HintPath>API\PlayerSettingsApi.dll</HintPath>
     </Reference>
   </ItemGroup>
 
