@@ -4,15 +4,17 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
-using CounterStrikeSharp.API.Modules.Utils;
 using CS2_GameHUDAPI;
 using System.Text.Json.Serialization;
+using CounterStrikeSharp.API.Core.Attributes;
+
 #if (USE_CLIENTPREFS)
 using PlayerSettings;
 #endif
 
 namespace CS2_ShowDamage
 {
+	[MinimumApiVersion(330)]
 	public class HUDConfig : BasePluginConfig
 	{
 		[JsonPropertyName("Channel_Damage")] public byte HUDCHANNEL_DAMAGE { get; set; } = 15;
@@ -33,8 +35,7 @@ namespace CS2_ShowDamage
 	{
 		public HUDConfig Config { get; set; } = new HUDConfig();
 		static readonly Random rd = new();
-		static Vector g_vecSelfDamage = new(0, -0.7f, 7);
-		static Vector[] g_vecPlayer = new Vector[65];
+		static System.Numerics.Vector3 g_vecSelfDamage = new(0, -0.7f, 7);
 		static bool[] g_bShow = new bool[65];
 		static System.Drawing.Color g_colorDamage = System.Drawing.Color.Aqua;
 		static System.Drawing.Color g_colorSelfDamage = System.Drawing.Color.Red;
@@ -46,7 +47,7 @@ namespace CS2_ShowDamage
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.6.2";
+		public override string ModuleVersion => "1.DZ.7";
 		public void OnConfigParsed(HUDConfig config)
 		{
 			if (config.HUDCHANNEL_DAMAGE < 0 || config.HUDCHANNEL_DAMAGE > 32)
@@ -127,7 +128,6 @@ namespace CS2_ShowDamage
 			for (int i = 0; i < 65; i++)
 			{
 				g_bShow[i] = new();
-				g_vecPlayer[i] = new(0, 0, 7);
 			}
 			RegisterEventHandler<EventPlayerHurt>(OnEventPlayerHurt, HookMode.Post);
 			RegisterEventHandler<EventPlayerConnectFull>(OnEventPlayerConnectFull, HookMode.Post);
@@ -155,9 +155,12 @@ namespace CS2_ShowDamage
 			if ((float)Config.HUDTIME_DAMAGE > 0.0 && attacker != null && attacker.IsValid && g_bShow[attacker.Slot])
 			{
 				double r = rd.NextDouble() * 2 * Math.PI;
-				g_vecPlayer[attacker.Slot].X = (float)Math.Cos(r) * Config.HUDRADIUS - 0.1f;
-				g_vecPlayer[attacker.Slot].Y = (float)Math.Sin(r) * Config.HUDRADIUS + 0.1f;
-				_api.Native_GameHUD_UpdateParams(attacker, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[attacker.Slot], g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
+				System.Numerics.Vector3 vecPlayer = new(0, 0, 7)
+				{
+					X = (float)Math.Cos(r) * Config.HUDRADIUS - 0.1f,
+					Y = (float)Math.Sin(r) * Config.HUDRADIUS + 0.1f
+				};
+				_api.Native_GameHUD_UpdateParams(attacker, Config.HUDCHANNEL_DAMAGE, vecPlayer, g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
 				_api.Native_GameHUD_Show(attacker, Config.HUDCHANNEL_DAMAGE, $"{iDamage}", (float)Config.HUDTIME_DAMAGE);
 			}
 			return HookResult.Continue;
@@ -191,7 +194,7 @@ namespace CS2_ShowDamage
 				}
 #endif
 
-				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, g_vecPlayer[player.Slot], g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
+				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, new System.Numerics.Vector3(0, 0, 7), g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
 				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, g_colorSelfDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
 			}
 		}

@@ -2,7 +2,7 @@
 Shows the damage dealt to the player
 
 ## Required packages:
-1. [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/) (Min version: 285)
+1. [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/) (Min version: 330)
 2. [CS2-GameHUD](https://github.com/darkerz7/CS2-GameHUD/)
 3. Optional [PlayerSettingsCS2](https://github.com/NickFox007/PlayerSettingsCS2) (0.9.3)
 
