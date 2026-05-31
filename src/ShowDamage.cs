@@ -14,7 +14,7 @@ using PlayerSettings;
 
 namespace CS2_ShowDamage
 {
-	[MinimumApiVersion(330)]
+	[MinimumApiVersion(369)]
 	public class HUDConfig : BasePluginConfig
 	{
 		[JsonPropertyName("Channel_Damage")] public byte HUDCHANNEL_DAMAGE { get; set; } = 15;
@@ -47,7 +47,7 @@ namespace CS2_ShowDamage
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.7";
+		public override string ModuleVersion => "1.DZ.8";
 		public void OnConfigParsed(HUDConfig config)
 		{
 			if (config.HUDCHANNEL_DAMAGE < 0 || config.HUDCHANNEL_DAMAGE > 32)
