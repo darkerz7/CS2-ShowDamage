@@ -4,9 +4,11 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
-using CS2_GameHUDAPI;
 using System.Text.Json.Serialization;
 using CounterStrikeSharp.API.Core.Attributes;
+using static CounterStrikeSharp.API.Core.Listeners;
+using CounterStrikeSharp.API.Modules.Timers;
+using CounterStrikeSharp.API.Modules.Extensions;
 
 #if (USE_CLIENTPREFS)
 using PlayerSettings;
@@ -14,32 +16,32 @@ using PlayerSettings;
 
 namespace CS2_ShowDamage
 {
-	[MinimumApiVersion(369)]
+	[MinimumApiVersion(379)]
 	public class HUDConfig : BasePluginConfig
 	{
-		[JsonPropertyName("Channel_Damage")] public byte HUDCHANNEL_DAMAGE { get; set; } = 15;
-		[JsonPropertyName("Channel_SelfDamage")] public byte HUDCHANNEL_SELFDAMAGE { get; set; } = 16;
-		[JsonPropertyName("Size")] public int HUDSIZE { get; set; } = 32;
-		[JsonPropertyName("Font")] public string HUDFONT { get; set; } = "Verdana";
-		[JsonPropertyName("WorldUnitsPerPx")] public float HUDUNITS { get; set; } = 0.007f;
 		[JsonPropertyName("Time")] public float HUDTIME_DAMAGE { get; set; } = 2.0f;
 		[JsonPropertyName("Time_Self")] public float HUDTIME_SELFDAMAGE { get; set; } = 2.0f;
-		[JsonPropertyName("Radius")] public float HUDRADIUS { get; set; } = 0.7f;
-		[JsonPropertyName("Self_PosX")] public float HUDSELFX { get; set; } = 0.0f;
-		[JsonPropertyName("Self_PosY")] public float HUDSELFY { get; set; } = -0.7f;
 		[JsonPropertyName("Flag")] public string? HUDFLAG { get; set; } = null;
-		[JsonPropertyName("Color")] public int[] HUDCOLOR { get; set; } = [0, 255, 255, 255];
-		[JsonPropertyName("Color_Self")] public int[] HUDSELFCOLOR { get; set; } = [255, 0, 0, 255];
 	}
-	public class ShowDamage : BasePlugin, IPluginConfig<HUDConfig>
+
+	class SD_UHUD
+	{
+		public bool Show;
+		public double fTimeDamage;
+		public double fTimeSelfDamage;
+		public bool __Cache_Hide_Damage = true;
+		public bool __Cache_Hide_Self_Damage = true;
+		public int __Cache_Position_Damage;
+		public SD_UHUD() { }
+	}
+
+    public class ShowDamage : BasePlugin, IPluginConfig<HUDConfig>
 	{
 		public HUDConfig Config { get; set; } = new HUDConfig();
-		static readonly Random rd = new();
-		static System.Numerics.Vector3 g_vecSelfDamage = new(0, -0.7f, 7);
-		static bool[] g_bShow = new bool[65];
-		static System.Drawing.Color g_colorDamage = System.Drawing.Color.Aqua;
-		static System.Drawing.Color g_colorSelfDamage = System.Drawing.Color.Red;
-		static IGameHUDAPI? _api;
+        static CCSCustomHudLayout? g_CustomHudLayout;
+        static double g_fGameTime;
+        static CounterStrikeSharp.API.Modules.Timers.Timer? g_Timer = new(0.1f, GameTimeUpdate, TimerFlags.REPEAT);
+        static readonly SD_UHUD[] g_Hud = new SD_UHUD[65];
 #if (USE_CLIENTPREFS)
 		private ISettingsApi? _PlayerSettingsAPI;
 		private readonly PluginCapability<ISettingsApi?> _PlayerSettingsAPICapability = new("settings:nfcore");
@@ -47,67 +49,19 @@ namespace CS2_ShowDamage
 		public override string ModuleName => "Show Damage";
 		public override string ModuleDescription => "Shows the damage dealt to the player";
 		public override string ModuleAuthor => "DarkerZ [RUS]";
-		public override string ModuleVersion => "1.DZ.8";
+		public override string ModuleVersion => "1.DZ.9";
 		public void OnConfigParsed(HUDConfig config)
 		{
-			if (config.HUDCHANNEL_DAMAGE < 0 || config.HUDCHANNEL_DAMAGE > 32)
-				config.HUDCHANNEL_DAMAGE = 15;
-
-			if (config.HUDCHANNEL_SELFDAMAGE < 0 || config.HUDCHANNEL_SELFDAMAGE > 32)
-				config.HUDCHANNEL_SELFDAMAGE = 15;
-
-			if (config.HUDSIZE < 16 || config.HUDSIZE > 256)
-				config.HUDSIZE = 32;
-
-			if (string.IsNullOrEmpty(config.HUDFONT))
-				config.HUDFONT = "Verdana";
-
 			if (config.HUDTIME_DAMAGE < 0.0f || config.HUDTIME_DAMAGE > 10.0f)
 				config.HUDTIME_DAMAGE = 2.0f;
 
 			if (config.HUDTIME_SELFDAMAGE < 0.0f || config.HUDTIME_SELFDAMAGE > 10.0f)
 				config.HUDTIME_SELFDAMAGE = 2.0f;
 
-			if (config.HUDRADIUS < 0.1f || config.HUDRADIUS > 10.0f)
-				config.HUDRADIUS = 0.7f;
-
-			if (config.HUDSELFX < -10.0f || config.HUDSELFX > 10.0f)
-				config.HUDSELFX = 0.0f;
-
-			if (config.HUDSELFY < -10.0f || config.HUDSELFY > 10.0f)
-				config.HUDSELFY = -0.7f;
-
-			if (config.HUDCOLOR.Length < 4)
-				config.HUDCOLOR = [0, 255, 255, 255];
-			for (int i = 0; i < config.HUDCOLOR.Length; i++)
-				if (config.HUDCOLOR[i] < 0 || config.HUDCOLOR[i] > 255)
-					config.HUDCOLOR[i] = 255;
-
-			if (config.HUDSELFCOLOR.Length < 4)
-				config.HUDSELFCOLOR = [0, 255, 255, 255];
-			for (int i = 0; i < config.HUDSELFCOLOR.Length; i++)
-				if (config.HUDSELFCOLOR[i] < 0 || config.HUDSELFCOLOR[i] > 255)
-					config.HUDSELFCOLOR[i] = 255;
-
 			Config = config;
-
-			g_vecSelfDamage.X = Config.HUDSELFX;
-			g_vecSelfDamage.Y = Config.HUDSELFY;
-			g_colorDamage = System.Drawing.Color.FromArgb(Config.HUDCOLOR[3], Config.HUDCOLOR[0], Config.HUDCOLOR[1], Config.HUDCOLOR[2]);
-			g_colorSelfDamage = System.Drawing.Color.FromArgb(Config.HUDSELFCOLOR[3], Config.HUDSELFCOLOR[0], Config.HUDSELFCOLOR[1], Config.HUDSELFCOLOR[2]);
 		}
 		public override void OnAllPluginsLoaded(bool hotReload)
 		{
-			try
-			{
-				PluginCapability<IGameHUDAPI> CapabilityGH = new("gamehud:api");
-				_api = IGameHUDAPI.Capability.Get();
-			}
-			catch (Exception)
-			{
-				_api = null;
-				Console.WriteLine($"[GameHUD] API Loading Failed!");
-			}
 
 #if (USE_CLIENTPREFS)
 			_PlayerSettingsAPI = _PlayerSettingsAPICapability.Get();
@@ -119,94 +73,196 @@ namespace CS2_ShowDamage
 			{
 				Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false, IsHLTV: false }).ToList().ForEach(player =>
 				{
-					SetHUD(player);
+                    SetHUDSettings(player);
 				});
 			}
 		}
 		public override void Load(bool hotReload)
 		{
-			for (int i = 0; i < 65; i++)
-			{
-				g_bShow[i] = new();
-			}
-			RegisterEventHandler<EventPlayerHurt>(OnEventPlayerHurt, HookMode.Post);
+			for (int i = 0; i < 65; i++) g_Hud[i] = new();
+            RegisterEventHandler<EventPlayerHurt>(OnEventPlayerHurt, HookMode.Post);
 			RegisterEventHandler<EventPlayerConnectFull>(OnEventPlayerConnectFull, HookMode.Post);
 			RegisterEventHandler<EventPlayerDisconnect>(OnEventPlayerDisconnect, HookMode.Pre);
-		}
+            RegisterListener<OnMapStart>(OnMapStart_Listener);
+            RegisterListener<OnMapEnd>(OnMapEnd_Listener);
+        }
 		public override void Unload(bool hotReload)
 		{
 			DeregisterEventHandler<EventPlayerHurt>(OnEventPlayerHurt, HookMode.Post);
 			DeregisterEventHandler<EventPlayerConnectFull>(OnEventPlayerConnectFull, HookMode.Post);
 			DeregisterEventHandler<EventPlayerDisconnect>(OnEventPlayerDisconnect, HookMode.Pre);
-			Utilities.GetPlayers().ForEach(player => { RemoveHUD(player); });
-		}
-		private HookResult OnEventPlayerHurt(EventPlayerHurt @event, GameEventInfo info)
-		{
-			if (_api == null) return HookResult.Continue;
-			CCSPlayerController? player = @event.Userid;
-			CCSPlayerController? attacker = @event.Attacker;
-			int iDamage = @event.DmgHealth;
-			if ((float)Config.HUDTIME_SELFDAMAGE > 0.0 && player != null && player.IsValid && g_bShow[player.Slot])
-			{
-				_api.Native_GameHUD_UpdateParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, g_colorSelfDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
-				_api.Native_GameHUD_Show(player, Config.HUDCHANNEL_SELFDAMAGE, $"-{iDamage}", (float)Config.HUDTIME_SELFDAMAGE);
+            RemoveListener<OnMapStart>(OnMapStart_Listener);
+            RemoveListener<OnMapEnd>(OnMapEnd_Listener);
+            Utilities.GetPlayers().ForEach(player => { RemoveHUDSettings(player); });
+			g_Timer?.Kill();
+			g_Timer = null;
+        }
 
-			}
-			if ((float)Config.HUDTIME_DAMAGE > 0.0 && attacker != null && attacker.IsValid && g_bShow[attacker.Slot])
+		private void OnMapStart_Listener(string sMapName)
+		{
+			Server.NextFrame(() =>
 			{
-				double r = rd.NextDouble() * 2 * Math.PI;
-				System.Numerics.Vector3 vecPlayer = new(0, 0, 7)
+				GetorCreateHudLayout();
+            });
+        }
+
+        private void OnMapEnd_Listener() => RemoveHudLayout();
+
+		private static void GameTimeUpdate()
+		{
+			g_fGameTime = Server.EngineTime;
+            Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false, IsHLTV: false }).ToList().ForEach(player =>
+            {
+				if (g_Hud[player.Slot].fTimeDamage < g_fGameTime) HideHudDamage(player);
+                if (g_Hud[player.Slot].fTimeSelfDamage < g_fGameTime) HideHudSelfDamage(player);
+            });
+        }
+
+        public static CCSCustomHudLayout? GetorCreateHudLayout()
+		{
+            if (g_CustomHudLayout is { IsValid: true }) return g_CustomHudLayout;
+            if (Utilities.CreateEntityByName<CCSCustomHudLayout>("custom_hud_layout") is { IsValid: true } customhud)
+            {
+                customhud.StrLayout = "panorama/layout/custom_game/showdamage_dz.vxml_c";
+                return g_CustomHudLayout = customhud;
+            }
+            return null;
+        }
+        public static void RemoveHudLayout() => g_CustomHudLayout = null;
+
+        private HookResult OnEventPlayerHurt(EventPlayerHurt @event, GameEventInfo info)
+		{
+			if (GetorCreateHudLayout() is { })
+			{
+				CCSPlayerController? player = @event.Userid;
+				CCSPlayerController? attacker = @event.Attacker;
+				int iDamage = @event.DmgHealth;
+				if ((float)Config.HUDTIME_SELFDAMAGE > 0.0 && player != null && player.IsValid && g_Hud[player.Slot].Show)
 				{
-					X = (float)Math.Cos(r) * Config.HUDRADIUS - 0.1f,
-					Y = (float)Math.Sin(r) * Config.HUDRADIUS + 0.1f
-				};
-				_api.Native_GameHUD_UpdateParams(attacker, Config.HUDCHANNEL_DAMAGE, vecPlayer, g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS);
-				_api.Native_GameHUD_Show(attacker, Config.HUDCHANNEL_DAMAGE, $"{iDamage}", (float)Config.HUDTIME_DAMAGE);
+					g_Hud[player.Slot].fTimeSelfDamage = g_fGameTime + Config.HUDTIME_SELFDAMAGE;
+					ShowHudSelfDamage(player, iDamage);
+                }
+				if ((float)Config.HUDTIME_DAMAGE > 0.0 && attacker != null && attacker.IsValid && g_Hud[attacker.Slot].Show)
+				{
+					g_Hud[attacker.Slot].fTimeDamage = g_fGameTime + Config.HUDTIME_DAMAGE;
+                    ShowHudDamage(attacker, iDamage);
+                }
 			}
 			return HookResult.Continue;
 		}
 		private HookResult OnEventPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
 		{
 			CCSPlayerController? player = @event.Userid;
-			RemoveHUD(player);
+            RemoveHUDSettings(player);
 			return HookResult.Continue;
 		}
 
 		private HookResult OnEventPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)
 		{
 			CCSPlayerController? player = @event.Userid;
-			SetHUD(player);
+            SetHUDSettings(player);
 			return HookResult.Continue;
 		}
 
-		void SetHUD(CCSPlayerController? player)
+		static void ShowHudDamage(CCSPlayerController player, int iDamage)
 		{
-			if (_api != null && player != null && player.IsValid)
+            if (GetorCreateHudLayout() is { } hud)
 			{
-				g_bShow[player.Slot] = string.IsNullOrEmpty(Config.HUDFLAG) || AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
+                hud.SetDialogVariableStringForPlayer(player, "sd-damage", "sd-damage-text", $"{iDamage}");
+				if (g_Hud[player.Slot].__Cache_Hide_Damage)
+				{
+					g_Hud[player.Slot].__Cache_Hide_Damage = false;
+                    hud.SetHasClassForPlayer(player, "sd-damage", "sd-class-hide", false);
+				}
+				int r = Random.Shared.Next(0, 30);
+				if (g_Hud[player.Slot].__Cache_Position_Damage != r)
+				{
+                    hud.SetHasClassForPlayer(player, "sd-damage", $"sd-class-position-{g_Hud[player.Slot].__Cache_Position_Damage}", false);
+                    hud.SetHasClassForPlayer(player, "sd-damage", $"sd-class-position-{r}", true);
+					g_Hud[player.Slot].__Cache_Position_Damage = r;
+                }
+            }
+        }
+
+        static void ShowHudSelfDamage(CCSPlayerController player, int iDamage)
+		{
+            if (GetorCreateHudLayout() is { } hud)
+            {
+                hud.SetDialogVariableStringForPlayer(player, "sd-self-damage", "sd-self-damage-text", $"-{iDamage}");
+                if (g_Hud[player.Slot].__Cache_Hide_Self_Damage)
+				{
+                    g_Hud[player.Slot].__Cache_Hide_Self_Damage = false;
+                    hud.SetHasClassForPlayer(player, "sd-self-damage", "sd-class-hide", false);
+                }
+            }
+        }
+
+		static void HideHudDamage(CCSPlayerController player)
+		{
+            if (GetorCreateHudLayout() is { } hud)
+            {
+                if (!g_Hud[player.Slot].__Cache_Hide_Damage)
+				{
+                    g_Hud[player.Slot].__Cache_Hide_Damage = true;
+					hud.SetHasClassForPlayer(player, "sd-damage", "sd-class-hide", true);
+                }
+            }
+        }
+
+		static void HideHudSelfDamage(CCSPlayerController player)
+		{
+            if (GetorCreateHudLayout() is { } hud)
+            {
+                if (!g_Hud[player.Slot].__Cache_Hide_Self_Damage)
+				{
+                    g_Hud[player.Slot].__Cache_Hide_Self_Damage = true;
+                    hud.SetHasClassForPlayer(player, "sd-self-damage", "sd-class-hide", true);
+                }
+            }
+        }
+
+        static void SetDefaultHudPosition(CCSPlayerController player)
+		{
+			if (GetorCreateHudLayout() is { } hud)
+			{
+				if (g_Hud[player.Slot].__Cache_Position_Damage != 0)
+				{
+					hud.SetHasClassForPlayer(player, "sd-damage", $"sd-class-position-{g_Hud[player.Slot].__Cache_Position_Damage}", false);
+					hud.SetHasClassForPlayer(player, "sd-damage", "sd-class-position-0", true);
+					g_Hud[player.Slot].__Cache_Position_Damage = 0;
+				}
+			}
+        }
+
+        void SetHUDSettings(CCSPlayerController? player)
+		{
+			if (player != null && player.IsValid)
+			{
+                g_Hud[player.Slot].Show = string.IsNullOrEmpty(Config.HUDFLAG) || AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
+                g_Hud[player.Slot].fTimeDamage = g_fGameTime - Config.HUDTIME_DAMAGE - -1.0f;
+                g_Hud[player.Slot].fTimeSelfDamage = g_fGameTime - Config.HUDTIME_SELFDAMAGE - -1.0f;
 #if (USE_CLIENTPREFS)
-				if (_PlayerSettingsAPI != null && g_bShow[player.Slot])
+                if (_PlayerSettingsAPI != null && g_Hud[player.Slot].Show)
 				{
 					string sValue = _PlayerSettingsAPI.GetPlayerSettingsValue(player, "ShowDamage", "1");
 					if (!string.IsNullOrEmpty(sValue) && Int32.TryParse(sValue, out int iValue))
-						if (iValue == 0) g_bShow[player.Slot] = false;
-						else g_bShow[player.Slot] = true;
+						if (iValue == 0) g_Hud[player.Slot].Show = false;
+						else g_Hud[player.Slot].Show = true;
 				}
 #endif
-
-				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_DAMAGE, new System.Numerics.Vector3(0, 0, 7), g_colorDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
-				_api.Native_GameHUD_SetParams(player, Config.HUDCHANNEL_SELFDAMAGE, g_vecSelfDamage, g_colorSelfDamage, Config.HUDSIZE, Config.HUDFONT, Config.HUDUNITS, PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER);
 			}
 		}
-
-		void RemoveHUD(CCSPlayerController? player)
+		void RemoveHUDSettings(CCSPlayerController? player)
 		{
-			if (_api != null && player != null && player.IsValid)
+			if (player != null && player.IsValid)
 			{
-				g_bShow[player.Slot] = false;
-				_api.Native_GameHUD_Remove(player, Config.HUDCHANNEL_DAMAGE);
-				_api.Native_GameHUD_Remove(player, Config.HUDCHANNEL_SELFDAMAGE);
-			}
+                g_Hud[player.Slot].Show = false;
+                g_Hud[player.Slot].fTimeDamage = g_fGameTime - Config.HUDTIME_DAMAGE - 1.0f;
+                g_Hud[player.Slot].fTimeSelfDamage = g_fGameTime - Config.HUDTIME_SELFDAMAGE - 1.0f;
+				HideHudDamage(player);
+				HideHudSelfDamage(player);
+				SetDefaultHudPosition(player);
+            }
 		}
 		[ConsoleCommand("css_showdamage", "Toggle show damage")]
 		[ConsoleCommand("css_showdmg", "Toggle show damage")]
@@ -220,13 +276,13 @@ namespace CS2_ShowDamage
 			bool bAccess = string.IsNullOrEmpty(Config.HUDFLAG) || AdminManager.PlayerHasPermissions(player, Config.HUDFLAG);
 			if (bAccess)
 			{
-				g_bShow[player.Slot] = !g_bShow[player.Slot];
-				if (command.CallingContext == CommandCallingContext.Console) player.PrintToConsole($"[ShowDamage] is {(g_bShow[player.Slot] ? "Enabled" : "Disabled")}");
-				else player.PrintToChat($" \x0B[\x04ShowDamage\x0B]\x01 is {(g_bShow[player.Slot] ? "Enabled" : "Disabled")}");
+                g_Hud[player.Slot].Show = !g_Hud[player.Slot].Show;
+				if (command.CallingContext == CommandCallingContext.Console) player.PrintToConsole($"[ShowDamage] is {(g_Hud[player.Slot].Show ? "Enabled" : "Disabled")}");
+				else player.PrintToChat($" \x0B[\x04ShowDamage\x0B]\x01 is {(g_Hud[player.Slot].Show ? "Enabled" : "Disabled")}");
 #if (USE_CLIENTPREFS)
 				if (_PlayerSettingsAPI != null)
 				{
-					if (g_bShow[player.Slot]) _PlayerSettingsAPI.SetPlayerSettingsValue(player, "ShowDamage", "1");
+					if (g_Hud[player.Slot].Show) _PlayerSettingsAPI.SetPlayerSettingsValue(player, "ShowDamage", "1");
 					else _PlayerSettingsAPI.SetPlayerSettingsValue(player, "ShowDamage", "0");
 				}
 #endif

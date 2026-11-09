@@ -1,0 +1,11 @@
+<root>
+	<styles>
+		<include src="s2r://panorama/styles/custom_game/showdamage_dz.vcss_c" />
+	</styles>
+	<Panel class="sd-root">
+		<Panel id="sd-panel">
+			<Label id="sd-damage" text="{s:sd-damage-text}" class="sd-text sd-text-damage sd-class-position-0 sd-class-hide" />
+			<Label id="sd-self-damage" text="{s:sd-self-damage-text}" class="sd-text sd-text-self-damage sd-class-hide" />
+		</Panel>
+	</Panel>
+</root>
